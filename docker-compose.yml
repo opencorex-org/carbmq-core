@@ -1,10 +1,75 @@
-version: '3.8'
 services:
-  crabmq:
-    build: .
-    image: crabmq:local
-    ports:
-      - "1883:1883"
-    volumes:
-      - ./config:/etc/crabmq:ro
+  db:
+    image: postgres:16-alpine
+    container_name: crabmq-db
     restart: unless-stopped
+    environment:
+      POSTGRES_DB: crabmq
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - crabmq-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d crabmq"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  broker:
+    build:
+      context: .
+      dockerfile: deployments/broker.Dockerfile
+    container_name: crabmq-broker
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      CRABMQ_ENV: production
+      CRABMQ_BROKER_ADDR: 0.0.0.0:1884
+      CRABMQ_METRICS_ADDR: 0.0.0.0:9100
+      CRABMQ_DATABASE_URL: postgres://postgres:postgres@db:5432/crabmq?sslmode=disable
+      CRABMQ_JWT_SECRET: ${CRABMQ_JWT_SECRET:-change-me}
+      CRABMQ_ALLOWED_ORIGINS: http://localhost:3000
+    ports:
+      - "1884:1884/udp"
+      - "9100:9100"
+
+  api:
+    build:
+      context: .
+      dockerfile: deployments/api.Dockerfile
+    container_name: crabmq-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      broker:
+        condition: service_started
+    environment:
+      CRABMQ_ENV: production
+      CRABMQ_API_ADDR: 0.0.0.0:8080
+      CRABMQ_DATABASE_URL: postgres://postgres:postgres@db:5432/crabmq?sslmode=disable
+      CRABMQ_JWT_SECRET: ${CRABMQ_JWT_SECRET:-change-me}
+      CRABMQ_API_BROKER_ADDR: broker:1884
+      CRABMQ_BROKER_METRICS_URL: http://broker:9100/metrics
+      CRABMQ_ALLOWED_ORIGINS: http://localhost:3000
+    ports:
+      - "8080:8080"
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: deployments/dashboard.Dockerfile
+    container_name: crabmq-dashboard
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "3000:80"
+
+volumes:
+  crabmq-db-data:

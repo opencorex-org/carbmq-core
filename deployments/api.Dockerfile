@@ -10,6 +10,6 @@ RUN adduser -D -g '' crabmq
 USER crabmq
 WORKDIR /app
 COPY --from=builder /out/crabmqd /app/crabmqd
-EXPOSE 1884/udp 9100
+EXPOSE 8080
 ENTRYPOINT ["/app/crabmqd"]
-CMD ["broker"]
+CMD ["api"]

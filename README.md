@@ -1,205 +1,180 @@
-# 🦀 CrabMQ
+# CrabMQ Core
 
-**CrabMQ** is a high-performance, open-source **MQTT broker** written in **Rust**, designed for **scalability, reliability, and safety**.  
-It is a community-driven project maintained by **OpenCorex**.
+CrabMQ Core is a QUIC-based messaging broker implementing QTT (QUIC Telemetry Transport), a modern alternative to MQTT designed for secure, low-latency IoT communication without certificate complexity.
 
-> Built with Rust 🦀 for modern IoT, messaging, and event-driven systems.
+This MVP keeps the QTT protocol inside the main repository while structuring the code like a production broker so the protocol layer can be extracted later with minimal churn.
 
----
+## Architecture
 
-## ✨ Features
+- `cmd/crabmqd` runs the broker daemon in `broker`, `api`, or `all` mode.
+- `internal/transport/quic` provides the QUIC transport with auto-generated TLS for encrypted-by-default sessions.
+- `internal/broker/*` contains session tracking, topic subscriptions, routing, rate limiting, and offline delivery.
+- `internal/auth/*` validates JWTs and enforces topic ACLs so devices only access their own namespaces.
+- `pkg/qtt/*` is the public QTT package used by the Go CLI, simulator, and API bridge.
+- `api/*` exposes device registration, token minting, telemetry queries, command dispatch, and WebSocket streaming.
+- `web/dashboard` is a React + Tailwind operations console for fleet health, telemetry, commands, and metrics.
+- `rust/crabmq-parser` and `rust/crabmq-cli` stay network-only and do not link directly against the Go code.
 
-- ⚡ High-performance async networking (Tokio)
-- 🧵 Safe concurrency with Rust
-- 📡 MQTT v3.1.1 support (in progress)
-- 🌲 Topic routing with wildcard support (`+`, `#`)
-- 🔁 Publish / Subscribe messaging
-- 🧠 Session management
-- 🪵 Structured logging with `tracing`
-- 🔐 Optional TLS & authentication (planned)
-- 📦 Modular, contributor-friendly architecture
-
----
-
-## 📦 Project Structure
+## Repository Layout
 
 ```text
-CrabMQ/
-├── config/                 # Configuration files (TOML)
-├── src/
-│   ├── broker/             # Core broker logic
-│   ├── protocol/           # MQTT protocol encoding/decoding
-│   ├── server/             # TCP server & connection handling
-│   ├── security/           # Auth & TLS (optional)
-│   ├── utils/              # Helpers (logging, config, timers)
-│   ├── errors.rs           # Common error handling
-│   └── main.rs             # Application entry point
-├── examples/               # Example MQTT clients
-├── tests/                  # Unit & integration tests
-├── scripts/                # Build & run scripts
-└── README.md
+crabmq-core/
+  cmd/
+    crabmqd/
+    crabmq-cli/
+    crabmq-sim/
+  internal/
+    broker/
+    transport/
+    protocol/
+    auth/
+    queue/
+    metrics/
+    config/
+  pkg/
+    qtt/
+  rust/
+    crabmq-cli/
+    crabmq-parser/
+  api/
+  web/
+    dashboard/
+  configs/
+  docs/
+  examples/
+  deployments/
 ```
 
----
+## Setup
 
-## 🚀 Getting Started
+### Local prerequisites
 
-### 1️⃣ Prerequisites
+- Go 1.25+
+- Node.js 22+
+- Docker Desktop or compatible Docker Engine
+- PostgreSQL 16+ if you are not using Compose
 
-- Rust (stable)
+### Environment
 
-Install Rust:
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-Verify:
-```bash
-rustc --version
-cargo --version
-```
-
----
-
-### 2️⃣ Clone the Repository
-
-```bash
-git clone https://github.com/opencorex-org/CrabMQ.git
-cd CrabMQ
-```
-
----
-
-### 3️⃣ Configure CrabMQ
-
-Edit the default configuration file:
+Copy the example environment file and adjust secrets and addresses as needed:
 
 ```bash
-config/default.toml
+cp configs/crabmq.env.example .env
 ```
 
-Example:
-```toml
-[broker]
-host = "0.0.0.0"
-port = 1883
-max_connections = 10000
+Important variables:
 
-[logging]
-level = "info"
-```
+- `CRABMQ_JWT_SECRET`
+- `CRABMQ_DATABASE_URL`
+- `CRABMQ_BROKER_ADDR`
+- `CRABMQ_API_ADDR`
+- `CRABMQ_BROKER_METRICS_URL`
 
----
-
-### 4️⃣ Build the Project
+### Run with Docker Compose
 
 ```bash
-cargo build
+docker compose up --build
 ```
 
-For production:
-```bash
-cargo build --release
-```
+Services:
 
----
+- Dashboard: `http://localhost:3000`
+- API: `http://localhost:8080`
+- Broker QUIC listener: `udp://localhost:1884`
+- Broker metrics: `http://localhost:9100/metrics`
+- PostgreSQL: `postgres://postgres:postgres@localhost:5432/crabmq`
 
-### 5️⃣ Run the Broker
+### Run locally without Docker
 
-Using Cargo:
-```bash
-cargo run
-```
-
-With config file:
-```bash
-cargo run -- --config config/default.toml
-```
-
-Or run the binary directly:
-```bash
-./target/debug/crabmq --config config/default.toml
-```
-
----
-
-## 🧪 Testing with MQTT Clients
-
-Install Mosquitto clients:
-
-### Ubuntu / Debian
-```bash
-sudo apt install mosquitto-clients
-```
-
-### macOS
-```bash
-brew install mosquitto
-```
-
-Subscribe:
-```bash
-mosquitto_sub -h localhost -p 1883 -t "test/topic"
-```
-
-Publish:
-```bash
-mosquitto_pub -h localhost -p 1883 -t "test/topic" -m "Hello CrabMQ"
-```
-
----
-
-## 🧪 Run Tests
+Start the broker and API in one process:
 
 ```bash
-cargo test
+go run ./cmd/crabmqd all
+```
 
----
-
-## 🐳 Docker
-
-Build the local Docker image:
+Start only the broker:
 
 ```bash
-./scripts/docker_build.sh
+go run ./cmd/crabmqd broker
 ```
 
-Run with Docker Compose (binds port 1883 and uses `./config`):
+Start only the API bridge:
 
 ```bash
-docker-compose up --build
+go run ./cmd/crabmqd api
 ```
 
-Or run the image directly:
+Run the simulator:
 
 ```bash
-docker run --rm -p 1883:1883 -v $(pwd)/config:/etc/crabmq:ro crabmq:local
+go run ./cmd/crabmq-sim
 ```
+
+## Demo Steps
+
+1. Start the stack with `docker compose up --build`.
+2. Register a device:
+
+```bash
+curl -X POST http://localhost:8080/devices/register \
+  -H 'Content-Type: application/json' \
+  -d '{"id":"device-001","name":"Demo Device"}'
 ```
 
----
+3. Generate a token:
 
-## 🧠 Roadmap
+```bash
+curl -X POST http://localhost:8080/devices/device-001/token
+```
 
-- [ ] MQTT QoS 1 & 2
-- [ ] Retained messages
-- [ ] Persistent sessions
-- [ ] TLS support (8883)
-- [ ] Authentication & ACL
-- [ ] WebSocket MQTT
-- [ ] Clustering & replication
-- [ ] Metrics & observability
+4. Run the simulator or a CLI client:
 
----
+```bash
+go run ./cmd/crabmq-sim
+```
 
-## 🤝 Contributing
+5. Open the dashboard at `http://localhost:3000` and watch telemetry arrive live.
+6. Send a command from the device details page.
+7. Observe the simulator logging the received command and acknowledging QoS 1 delivery.
 
-Contributions are welcome! 🎉  
+## QTT Packet Example
 
-Please open an issue or submit a pull request.
+```json
+{
+  "type": "PUBLISH",
+  "packetId": "f87c3b6b-3147-4129-8afd-bcb223e18d1b",
+  "topic": "device/device-001/telemetry",
+  "qos": 1,
+  "payload": {
+    "temperature": 23.6,
+    "humidity": 46.4
+  },
+  "timestamp": "2026-04-30T10:15:30Z"
+}
+```
 
----
+## Security Notes
 
-## 📜 License
+- QUIC provides transport encryption by default.
+- JWTs replace certificate provisioning for device identity in the MVP.
+- Topic ACLs constrain device access to `device/{id}/...` namespaces.
+- Broker-side rate limiting protects against burst abuse.
+- QoS 1 packets are persisted for offline delivery until acknowledged.
 
-CrabMQ is licensed under the **Apache License 2.0**
+## Documentation
+
+- [QTT spec](docs/qtt-spec.md)
+- [Architecture overview](docs/architecture.md)
+
+## Current MVP Scope
+
+- QUIC broker with multi-client session handling
+- JSON-based QTT packets
+- QoS 0 and QoS 1 publish flows
+- Persistent offline queue
+- JWT auth and topic ACLs
+- Prometheus metrics endpoint
+- Device registration and token issuance API
+- Live dashboard over WebSocket
+- Go simulator and Go CLI
+- Rust parser and Rust CLI scaffold
