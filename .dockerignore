@@ -1,0 +1,9 @@
+target
+.git
+.github
+README.md
+scripts
+tests
+examples
+node_modules
+.env

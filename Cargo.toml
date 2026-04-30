@@ -1,32 +1,23 @@
-[package]
-name = "crabmq"
-version = "0.1.0"
+[workspace]
+members = [
+    "rust/crabmq-cli",
+    "rust/crabmq-parser",
+]
+resolver = "2"
+
+[workspace.package]
 edition = "2021"
-license = "MIT"
-description = "A minimal MQTT-like broker skeleton in Rust (work-in-progress)"
-repository = "https://github.com/lahiruudayakumara/CrabMQ"
+license = "Apache-2.0"
+version = "0.1.0"
+authors = ["OpenCorex"]
 
-[features]
-# Enable TLS support (placeholder, wiring only)
-tls = ["tokio-rustls", "rustls-pemfile"]
-
-[dependencies]
-tokio = { version = "1.39", features = ["full"] }
-bytes = "1"
-serde = { version = "1", features = ["derive"] }
-toml = "0.8"
-thiserror = "1"
-log = "0.4"
-env_logger = "0.11"
-
-# Optional TLS bits
-rustls-pemfile = { version = "2", optional = true }
-tokio-rustls = { version = "0.26", optional = true }
-
-[dev-dependencies]
-# Example/test helpers (keep minimal)
-anyhow = "1"
-
-[profile.release]
-lto = true
-codegen-units = 1
+[workspace.dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+quinn = "0.11"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+time = { version = "0.3", features = ["formatting"] }
+tokio = { version = "1.40", features = ["full"] }
+uuid = { version = "1.10", features = ["serde", "v4"] }
